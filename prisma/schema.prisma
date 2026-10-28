@@ -14,7 +14,15 @@ generator client {
 enum Role {
   SUPER_ADMIN
   ADMIN
-  CASHIER
+  STORE_ADMIN
+  DOCTOR
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  PENDING_VERIFICATION
 }
 
 enum BatchStatus {
@@ -61,16 +69,17 @@ enum InvoiceStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  username     String   @unique
+  id           String        @id @default(uuid())
+  email        String        @unique
+  username     String        @unique
   passwordHash String
   fullName     String
   phone        String?
-  role         Role     @default(ADMIN)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         Role          @default(STORE_ADMIN)
+  status       AccountStatus @default(ACTIVE)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   storeAssignments UserStoreAssignment[]
   salesInvoices    SalesInvoice[]
@@ -78,6 +87,7 @@ model User {
   auditLogs        AuditLog[]
   loginEvents      LoginEvent[]
   stockMovements   StockMovement[]
+  roleAssignments  UserRoleAssignment[]
 }
 
 model Store {
@@ -113,6 +123,56 @@ model Store {
   accounts         Account[]
   journals         Journal[]
   journalEntries   JournalEntry[]
+  roleAssignments  UserRoleAssignment[]
+}
+
+model RoleDefinition {
+  id          String   @id @default(uuid())
+  code        String   @unique // SUPER_ADMIN, ADMIN, STORE_ADMIN, DOCTOR
+  name        String   // Super Admin, Multi-Store Admin, Store Admin, Doctor
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermissionMapping[]
+  userRoles   UserRoleAssignment[]
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String   // platform, users, pos, inventory, purchases, accounting, gst, doctor, digilocker
+  action      String   // view, create, edit, delete, export, approve
+  code        String   @unique // e.g. "users:create", "pos:checkout", "accounting:post"
+  category    String
+  description String?
+
+  roles RolePermissionMapping[]
+}
+
+model RolePermissionMapping {
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role       RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission     @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRoleAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  storeId   String?  // null = platform-wide (Super Admin), or store-specific role
+  createdAt DateTime @default(now())
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role  RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  store Store?         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, storeId])
 }
 
 model UserStoreAssignment {
