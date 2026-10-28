@@ -512,8 +512,14 @@ export async function registerVendorPayment(params: {
 
   let invoice: any = null;
   if (purchaseInvoiceId) {
-    invoice = await prisma.purchaseInvoice.findUnique({
-      where: { id: purchaseInvoiceId },
+    invoice = await prisma.purchaseInvoice.findFirst({
+      where: {
+        OR: [
+          { id: purchaseInvoiceId },
+          { invoiceNumber: purchaseInvoiceId },
+          { supplierInvoiceNumber: purchaseInvoiceId },
+        ],
+      },
     });
     if (!invoice) {
       throw new Error("Purchase Invoice not found.");
@@ -553,7 +559,7 @@ export async function registerVendorPayment(params: {
     const payment = await tx.supplierPayment.create({
       data: {
         storeId,
-        supplierId,
+        supplierId: effectiveSupplierId,
         purchaseInvoiceId: invoice?.id || null,
         amount,
         paymentMethod,
@@ -602,7 +608,7 @@ export async function registerVendorPayment(params: {
 
     // 3. Decrement Supplier balance
     const updatedSupplier = await tx.supplier.update({
-      where: { id: supplierId },
+      where: { id: effectiveSupplierId },
       data: {
         currentBalance: {
           decrement: amount,

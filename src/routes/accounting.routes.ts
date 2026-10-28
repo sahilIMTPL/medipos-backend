@@ -647,17 +647,30 @@ export async function accountingRoutes(server: FastifyInstance, options: Fastify
   server.post("/vendor-payments", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = request.body as any;
 
-    let supplierId = body.supplierId;
-    if (!supplierId && body.purchaseInvoiceId) {
-      const inv = await prisma.purchaseInvoice.findUnique({
-        where: { id: body.purchaseInvoiceId },
-        select: { supplierId: true },
+    let supplierId = body.supplierId?.trim();
+    let purchaseInvoiceId = body.purchaseInvoiceId?.trim();
+
+    if (purchaseInvoiceId) {
+      const inv = await prisma.purchaseInvoice.findFirst({
+        where: {
+          OR: [
+            { id: purchaseInvoiceId },
+            { invoiceNumber: purchaseInvoiceId },
+            { supplierInvoiceNumber: purchaseInvoiceId },
+          ],
+        },
+        select: { id: true, supplierId: true },
       });
-      if (inv) supplierId = inv.supplierId;
+      if (inv) {
+        purchaseInvoiceId = inv.id;
+        if (!supplierId) {
+          supplierId = inv.supplierId;
+        }
+      }
     }
 
-    if (!supplierId) {
-      return reply.status(400).send({ success: false, message: "Supplier ID is required." });
+    if (!supplierId && !purchaseInvoiceId) {
+      return reply.status(400).send({ success: false, message: "Supplier ID or Bill ID is required." });
     }
 
     const amount = Number(body.amount);
@@ -672,8 +685,8 @@ export async function accountingRoutes(server: FastifyInstance, options: Fastify
 
     try {
       const result = await registerVendorPayment({
-        purchaseInvoiceId: body.purchaseInvoiceId || undefined,
-        supplierId,
+        purchaseInvoiceId: purchaseInvoiceId || undefined,
+        supplierId: supplierId || "",
         amount,
         paymentMethod,
         paymentDate: body.paymentDate ? new Date(body.paymentDate) : new Date(),
