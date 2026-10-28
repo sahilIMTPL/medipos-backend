@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../db";
-import { AccountType, JournalType, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { AccountType, JournalType, PaymentMethod, PaymentStatus, Role } from "@prisma/client";
 import {
   ensureDefaultAccountingSetup,
   registerCustomerPayment,
@@ -13,6 +13,16 @@ import { recordAuditLog } from "./audit-logs.routes";
 import { resolveStoreTenant } from "../middleware/auth";
 
 export async function accountingRoutes(server: FastifyInstance, options: FastifyPluginOptions) {
+  // Enforce role separation: Clinical/Doctor accounts cannot access accounting
+  server.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.authUser?.role === Role.DOCTOR) {
+      return reply.status(403).send({
+        success: false,
+        message: "Forbidden: Clinical/Doctor accounts do not have access to financial accounting.",
+      });
+    }
+  });
+
   // Helper to resolve store ID
   async function getStoreId(req: FastifyRequest): Promise<string> {
     try {

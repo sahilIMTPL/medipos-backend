@@ -24,16 +24,18 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   try {
     const decoded = await request.jwtVerify<AuthenticatedUserPayload>();
     
-    // Check if user account is still active in DB
+    // Check if user account is still active and valid in DB
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, isActive: true, role: true },
+      select: { id: true, isActive: true, role: true, status: true },
     });
 
-    if (!user || !user.isActive) {
-      return reply.status(401).send({
+    if (!user || !user.isActive || user.status === "SUSPENDED" || user.status === "EXPIRED") {
+      return reply.status(403).send({
         success: false,
-        message: "User session is invalid or account has been deactivated.",
+        message: user?.status === "EXPIRED"
+          ? "Your user account has expired. Please contact your administrator."
+          : "User account is suspended or deactivated. Access denied.",
       });
     }
 

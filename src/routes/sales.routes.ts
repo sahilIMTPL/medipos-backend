@@ -7,6 +7,7 @@ import {
   MovementType,
   PaymentMethod,
   PaymentStatus,
+  Role,
 } from "@prisma/client";
 import { recordAuditLog } from "./audit-logs.routes";
 import { resolveStoreTenant } from "../middleware/auth";
@@ -232,6 +233,10 @@ export async function salesRoutes(server: FastifyInstance, options: FastifyPlugi
 
   // 3. POS Billing Checkout (Atomic stock deduction + sequential invoice generation)
   server.post("/", async (request: FastifyRequest, reply: FastifyReply) => {
+    if ((request as any).authUser?.role === Role.DOCTOR) {
+      return reply.status(403).send({ success: false, message: "Doctors cannot create sales billing invoices." });
+    }
+
     const body = request.body as any;
 
     if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {

@@ -1,7 +1,12 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../db";
+import { authenticate, requireRole } from "../middleware/auth";
+import { Role } from "@prisma/client";
 
 export async function superAdminRoutes(server: FastifyInstance, options: FastifyPluginOptions) {
+  server.addHook("preHandler", authenticate);
+  server.addHook("preHandler", requireRole([Role.SUPER_ADMIN]));
+
   // 1. Global Platform Dashboard KPI & Multi-Store Health Overview
   server.get("/dashboard", async (request: FastifyRequest, reply: FastifyReply) => {
     try {
