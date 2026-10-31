@@ -14,6 +14,8 @@ import { resolveStoreTenant } from "../middleware/auth";
 import { postSalesInvoiceJournalEntry } from "../services/accounting.service";
 import { taskQueue } from "../services/asyncQueue.service";
 import { cache } from "../services/cache.service";
+import { realtimeService } from "../services/realtime.service";
+import { computeShiftSummary } from "../services/shift.service";
 
 export async function salesRoutes(server: FastifyInstance, options: FastifyPluginOptions) {
   // 1. List Sales Invoices with filters and search
@@ -640,6 +642,23 @@ export async function salesRoutes(server: FastifyInstance, options: FastifyPlugi
       });
 
       cache.invalidatePrefix("products:");
+
+      // Instant Real-Time WebSocket Broadcast to Cash Registers & Staff Screens
+      if (invoice.shiftId) {
+        try {
+          const shiftSummary = await computeShiftSummary(invoice.shiftId);
+          realtimeService.notifySaleCompleted(storeId, shiftSummary, {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            grandTotal,
+            paidAmount,
+            changeAmount,
+            paymentMethod,
+          });
+        } catch (wsErr) {
+          server.log.warn(wsErr, "Failed to broadcast real-time shift sale update");
+        }
+      }
 
       return reply.status(201).send({
         success: true,

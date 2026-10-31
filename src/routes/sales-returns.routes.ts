@@ -3,6 +3,8 @@ import { prisma } from "../db";
 import { PaymentMethod, MovementType, InvoiceStatus } from "@prisma/client";
 import { recordAuditLog } from "./audit-logs.routes";
 import { resolveStoreTenant } from "../middleware/auth";
+import { realtimeService } from "../services/realtime.service";
+import { computeShiftSummary } from "../services/shift.service";
 
 export async function salesReturnsRoutes(server: FastifyInstance) {
   // 1. List Sales Returns
@@ -525,6 +527,25 @@ export async function salesReturnsRoutes(server: FastifyInstance) {
       },
       ipAddress: request.ip,
     });
+
+    // Real-time WebSocket update for active shift
+    try {
+      const activeShift = await prisma.cashRegisterShift.findFirst({
+        where: { storeId: invoice.storeId, status: "OPEN" },
+        select: { id: true },
+      });
+      if (activeShift) {
+        const updatedSummary = await computeShiftSummary(activeShift.id);
+        realtimeService.notifySaleReturned(invoice.storeId, updatedSummary, {
+          returnId: createdReturn.id,
+          returnNumber: createdReturn.returnNumber,
+          totalRefundAmount,
+          refundMethod: body.refundMethod || "CASH",
+        });
+      }
+    } catch (wsErr) {
+      server.log.warn(wsErr, "Failed to broadcast real-time shift refund update");
+    }
 
     return reply.send({
       success: true,
