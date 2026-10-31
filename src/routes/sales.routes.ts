@@ -500,10 +500,17 @@ export async function salesRoutes(server: FastifyInstance, options: FastifyPlugi
 
         const invoiceNumber = `INV-${currentYear}-${String(seq.lastSequence).padStart(5, "0")}`;
 
+        // Find active open shift for this store
+        const activeShift = await tx.cashRegisterShift.findFirst({
+          where: { storeId, status: "OPEN" },
+          select: { id: true },
+        });
+
         // 2. Create Sales Invoice
         const createdInvoice = await tx.salesInvoice.create({
           data: {
             storeId,
+            shiftId: body.shiftId || activeShift?.id || null,
             invoiceNumber,
             customerId: customerId || null,
             prescriptionId,
