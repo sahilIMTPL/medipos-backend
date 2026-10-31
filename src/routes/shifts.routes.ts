@@ -11,6 +11,7 @@ import {
   getShiftHistory,
 } from "../services/shift.service";
 import { CashMovementType } from "@prisma/client";
+import { realtimeService } from "../services/realtime.service";
 
 export async function shiftRoutes(server: FastifyInstance, options: FastifyPluginOptions) {
   // Helper to extract store ID safely
@@ -90,6 +91,9 @@ export async function shiftRoutes(server: FastifyInstance, options: FastifyPlugi
         ipAddress: request.ip,
       });
 
+      // Broadcast instant shift opened event to all connected registers and devices
+      realtimeService.notifyShiftOpened(storeId, shift);
+
       return reply.status(201).send({
         success: true,
         message: `Shift #${shift.shiftNumber} opened successfully with ₹${openingCashFloat.toFixed(2)} opening float.`,
@@ -164,6 +168,9 @@ export async function shiftRoutes(server: FastifyInstance, options: FastifyPlugi
 
       const updatedSummary = await computeShiftSummary(body.shiftId);
 
+      // Broadcast instant cash movement event to all connected registers and devices
+      realtimeService.notifyCashMovement(storeId, updatedSummary, movement);
+
       return reply.status(201).send({
         success: true,
         message: `Recorded ${body.type.replace("_", " ")} of ₹${amount.toFixed(2)}.`,
@@ -225,6 +232,9 @@ export async function shiftRoutes(server: FastifyInstance, options: FastifyPlugi
         ipAddress: request.ip,
       });
 
+      // Broadcast instant shift closed event to all connected registers and devices
+      realtimeService.notifyShiftClosed(storeId, closedShift);
+
       return reply.send({
         success: true,
         message: `Shift #${closedShift.shiftNumber} closed successfully. Variance: ₹${(closedShift.cashVariance || 0).toFixed(2)}`,
@@ -260,3 +270,4 @@ export async function shiftRoutes(server: FastifyInstance, options: FastifyPlugi
     }
   });
 }
+

@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
 import { config } from "./config";
 import { prisma } from "./db";
 import { authRoutes } from "./routes/auth.routes";
@@ -24,6 +25,7 @@ import { auditLogsRoutes, recordAuditLog } from "./routes/audit-logs.routes";
 import { superAdminRoutes } from "./routes/super-admin.routes";
 import { usersRoutes } from "./routes/users.routes";
 import { shiftRoutes } from "./routes/shifts.routes";
+import { realtimeRoutes } from "./routes/realtime.routes";
 import { prescriptionRoutes } from "./routes/prescriptions.routes";
 import { doctorRoutes } from "./routes/doctor.routes";
 import { gstRoutes } from "./routes/gst.routes";
@@ -64,6 +66,13 @@ export async function buildServer(): Promise<FastifyInstance> {
     max: 600, // 600 requests per minute per IP
     timeWindow: "1 minute",
     allowList: ["127.0.0.1", "localhost"],
+  });
+
+  // Enable Real-time WebSockets
+  await server.register(websocket, {
+    options: {
+      maxPayload: 1048576, // 1MB payload limit
+    },
   });
 
   // Register background task queue worker handlers
@@ -146,6 +155,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(superAdminRoutes, { prefix: "/api/super-admin" });
   await server.register(usersRoutes, { prefix: "/api/users" });
   await server.register(shiftRoutes, { prefix: "/api/shifts" });
+  await server.register(realtimeRoutes);
 
   // Global Error Handler
   server.setErrorHandler((error, request, reply) => {
