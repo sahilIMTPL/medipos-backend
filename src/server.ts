@@ -23,6 +23,7 @@ import { notificationsRoutes } from "./routes/notifications.routes";
 import { auditLogsRoutes, recordAuditLog } from "./routes/audit-logs.routes";
 import { superAdminRoutes } from "./routes/super-admin.routes";
 import { usersRoutes } from "./routes/users.routes";
+import { shiftRoutes } from "./routes/shifts.routes";
 import { prescriptionRoutes } from "./routes/prescriptions.routes";
 import { doctorRoutes } from "./routes/doctor.routes";
 import { gstRoutes } from "./routes/gst.routes";
@@ -144,6 +145,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(auditLogsRoutes, { prefix: "/api/audit-logs" });
   await server.register(superAdminRoutes, { prefix: "/api/super-admin" });
   await server.register(usersRoutes, { prefix: "/api/users" });
+  await server.register(shiftRoutes, { prefix: "/api/shifts" });
 
   // Global Error Handler
   server.setErrorHandler((error, request, reply) => {

@@ -68,6 +68,17 @@ enum InvoiceStatus {
   REFUNDED
 }
 
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  CASH_IN
+  CASH_OUT
+  BANK_DROP
+}
+
 model User {
   id           String        @id @default(uuid())
   email        String        @unique
@@ -88,6 +99,8 @@ model User {
   loginEvents      LoginEvent[]
   stockMovements   StockMovement[]
   roleAssignments  UserRoleAssignment[]
+  openedShifts     CashRegisterShift[]   @relation("ShiftOpenedBy")
+  closedShifts     CashRegisterShift[]   @relation("ShiftClosedBy")
 }
 
 model Store {
@@ -124,6 +137,8 @@ model Store {
   journals         Journal[]
   journalEntries   JournalEntry[]
   roleAssignments  UserRoleAssignment[]
+  shifts           CashRegisterShift[]
+  cashMovements    CashMovement[]
 }
 
 model RoleDefinition {
@@ -574,15 +589,17 @@ model SalesInvoice {
   paymentMethod    PaymentMethod @default(CASH)
   status           InvoiceStatus @default(COMPLETED)
   createdById      String?
+  shiftId          String?
   digilockerDocUri String?       // DigiLocker digital invoice URI
   notes            String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  prescription Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
-  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer     Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  prescription Prescription?      @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  createdBy    User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  shift        CashRegisterShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   items        SalesItem[]
   payments     SalesPayment[]
   returns      SalesReturn[]
@@ -593,6 +610,7 @@ model SalesInvoice {
   @@index([createdById])
   @@index([storeId, invoiceDate])
   @@index([storeId, paymentStatus])
+  @@index([storeId, shiftId])
   @@index([invoiceNumber])
 }
 
@@ -851,4 +869,77 @@ model JournalItem {
   @@index([partnerId])
   @@index([matchingNumber])
 }
+
+// ----------------------------------------------------
+// 9. Cash Register & Daily Shifts Management
+// ----------------------------------------------------
+
+model CashRegisterShift {
+  id                    String            @id @default(uuid())
+  storeId               String
+  shiftNumber           Int               @default(1)
+  openedById            String
+  closedById            String?
+  status                ShiftStatus       @default(OPEN)
+
+  openedAt              DateTime          @default(now())
+  closedAt              DateTime?
+
+  openingCashFloat      Decimal           @default(0.0) @db.Decimal(12, 2)
+  openingBankBalance    Decimal           @default(0.0) @db.Decimal(12, 2)
+  openingNotes          String?
+
+  totalCashSales        Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalUpiSales         Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalCardSales        Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalCreditSales      Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  totalCustomerDuesCash Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalCustomerDuesBank Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  totalSupplierPaidCash Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalSupplierPaidBank Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  totalCashIn           Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalCashOut          Decimal           @default(0.0) @db.Decimal(12, 2)
+  totalCashRefunds      Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  expectedClosingCash   Decimal           @default(0.0) @db.Decimal(12, 2)
+  actualClosingCash     Decimal           @default(0.0) @db.Decimal(12, 2)
+  cashVariance          Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  expectedClosingBank   Decimal           @default(0.0) @db.Decimal(12, 2)
+
+  denominations         Json?
+  closingNotes          String?
+
+  store                 Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  openedBy              User              @relation("ShiftOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy              User?             @relation("ShiftClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  movements             CashMovement[]
+  salesInvoices         SalesInvoice[]
+
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([storeId, status])
+  @@index([storeId, openedAt])
+}
+
+model CashMovement {
+  id          String            @id @default(uuid())
+  shiftId     String
+  storeId     String
+  type        CashMovementType
+  amount      Decimal           @db.Decimal(12, 2)
+  reason      String
+  createdById String
+  createdAt   DateTime          @default(now())
+
+  shift       CashRegisterShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, shiftId])
+}
+
 
