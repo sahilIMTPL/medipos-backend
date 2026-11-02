@@ -23,3 +23,4 @@ export async function realtimeRoutes(server: FastifyInstance, options: FastifyPl
     });
   });
 }
+
